@@ -53,6 +53,10 @@ bittrex.options({
                         console.log('Market Update for ' + data_for.MarketName);
                         data_for.Fills.forEach(function (fill) {
 //                            console.log(fill);
+//                            { OrderType: 'SELL',
+//                                    Rate: 8581.0000001,
+//                                    Quantity: 0.00700967,
+//                                    TimeStamp: '2018-03-20T03:54:46.42' }
                             fill.MarketName = data_for.MarketName;
                             var timestamp = moment().format('YYYY-MM-DD HH:mm:ss.SSS');
                             fill.TimeStamp = timestamp;
@@ -68,9 +72,24 @@ bittrex.options({
                             var timestamp = moment().format('YYYY-MM-DD HH:mm:ss.SSS');
                             marketsDelta.TimeStamp = timestamp;
                             pool.query('INSERT INTO market SET ?', marketsDelta);
-                            console.log('Ticker Update for ' + marketsDelta.MarketName);
+//                            console.log(marketsDelta);
+//                { MarketName: 'USDT-XRP',
+//                        High: 0.724,
+//                        Low: 0.62765114,
+//                        Volume: 6219240.84456133,
+//                        Last: 0.7021024,
+//                        BaseVolume: 4186587.26447341,
+//                        TimeStamp: '2018-03-20T03:54:49.167',
+//                        Bid: 0.7021024,
+//                        Ask: 0.70279992,
+//                        OpenBuyOrders: 787,
+//                        OpenSellOrders: 2916,
+//                        PrevDay: 0.645,
+//                        Created: '2017-07-14T17:10:10.737' }
+//                            console.log('Ticker Update for ' + marketsDelta.MarketName);
                         });
-                    });
+                    }
+                    );
                 }
             });
         },

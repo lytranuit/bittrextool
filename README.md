@@ -1,0 +1,2 @@
+# bittrextool
+tool bittrex analysis

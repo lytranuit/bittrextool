@@ -22,18 +22,11 @@ const transporter = nodemailer.createTransport({
 const mailOptions = {
     from: 'lytranuit@gmail.com',
     to: 'lytranuit@gmail.com',
-    subject: 'Báo cáo giá bitrex',
+    subject: 'Báo cáo giá bitrex'
 };
-//const postgres = pgp(config.pg_db);
 bittrex.options(key);
-const markets = [{
-        MarketName: "USDT-BTC"
-    }, {
-        MarketName: "USDT-ZEC"
-    }, {
-        MarketName: "USDT-LTC"
-    },
-];
+const markets = {
+};
 //const goodNews = {
 //    candle1hour: false,
 //    candle2hour: false,
@@ -46,29 +39,28 @@ const markets = [{
 //    candle1thirymin: false,
 //    candle2thirymin: false
 //}
-cronCandleHour();
-cronCandle30Min();
-//bittrex.getmarketsummary({market: "BTC-LTC"}, function (data, err) {
-//
-//    if (err) {
-//        return console.error(err);
-//    }
-//    console.log(data.result[0]);
-//    bittrex.getmarkethistory({market: "BTC-LTC"}, function (ticker) {
-//        console.log(ticker);
-//    });
-////    for (var i in data.result) {
-////        bittrex.getticker({market: data.result[i].MarketName}, function (ticker) {
-////            console.log(ticker);
-////        });
-////    }
-//});
+bittrex.getmarketsummaries(function (data, err) {
+
+    if (err) {
+        return console.error(err);
+    }
+    for (var i in data.result) {
+        var row = data.result[i];
+        if (row['MarketName'].indexOf("USDT") != -1 || row['MarketName'].indexOf("BTC") != -1) {
+            markets[row['MarketName']] = {
+                MarketName: row['MarketName'],
+                last: row['Last']
+            };
+        }
+    }
+    cronCandleHour();
+//cronCandle30Min();
+});
 bittrex.options({
     verbose: true,
     websockets: {
         onConnect: function () {
             console.log('onConnect fired');
-
 //                            { OrderType: 'SELL',
 //                                    Rate: 8581.0000001,
 //                                    Quantity: 0.00700967,
@@ -128,9 +120,6 @@ bittrex.websockets.client(function (client) {
 // in onConnect so that they are fired during a reconnection event.
     console.log('Connected');
 });
-
-
-
 //    { O: 8610.0000001,
 //  H: 8645.09076831,
 //  L: 8551.00000003,
@@ -138,41 +127,63 @@ bittrex.websockets.client(function (client) {
 //  V: 128.33211765,
 //  T: '2018-03-20T04:00:00',
 //  BV: 1103543.7812201 }
-
-function getCandle(tickInterval) {
-    markets.forEach(function (market) {
-        var market = market.MarketName;
-        bittrex.getcandles({
-            marketName: market,
-            tickInterval: tickInterval, // intervals are keywords
-        }, function (data, err) {
-            if (data.success) {
-                var results = data.result;
-                results.forEach(function (result) {
-                    var t = result['T'];
-                    var timestamp = moment(t + "+00:00").format('YYYY-MM-DD HH:mm:ss.SSS');
-                    result['T'] = timestamp;
-                    result['marketName'] = market;
-                    result['tickInterval'] = tickInterval;
-                    pool.query('INSERT INTO candle SET ?', result).catch(function () {
-                        return pool.query('UPDATE candle SET ? WHERE `marketName` = "' + result['marketName'] + '" and `tickInterval` = "' + result['tickInterval'] + '" and `T` = "' + result['T'] + '"', result);
-                    }).catch(function () {
-                        console.log("LOI GI DO");
-                        return;
-                    });
+function getCandleAllMarket(tickInterval) {
+    for (var i in markets) {
+        var market = i;
+        getCandle(market, tickInterval);
+    }
+}
+function getCandle(market, tickInterval) {
+    bittrex.getcandles({
+        marketName: market,
+        tickInterval: tickInterval, // intervals are keywords
+    }, function (data, err) {
+        markets[market].up2candle = false;
+        markets[market].down2candle = false;
+        markets[market].send1 = false;
+        if (err) {
+            return false;
+        }
+        if (data.success) {
+            var results = data.result;
+            results.forEach(function (result) {
+                var t = result['T'];
+                var timestamp = moment(t + "+00:00").format('YYYY-MM-DD HH:mm:ss.SSS');
+                result['T'] = timestamp;
+                result['marketName'] = market;
+                result['tickInterval'] = tickInterval;
+                pool.query('INSERT INTO candle SET ?', result).catch(function () {
+                    return pool.query('UPDATE candle SET ? WHERE `marketName` = "' + result['marketName'] + '" and `tickInterval` = "' + result['tickInterval'] + '" and `T` = "' + result['T'] + '"', result);
+                }).catch(function () {
+                    console.log("LOI GI DO");
+                    return;
                 });
-                if (tickInterval == "hour") {
-                    var last = results[results.length - 1];
-                    if (moment(last.T).valueOf() == moment().startOf("hour").valueOf()) {
-                        var array = results.slice(-3);
-                        array.pop();
-                    } else {
-                        var array = results.slice(-2);
-                    }
-                    if (array.length == 2) {
-                        var check_candle = checkCandle(array);
-                        if (check_candle == "Up") {
-                            mailOptions['text'] = market + " đã tăng 2 lần liên tiếp";
+            });
+            if (tickInterval == "hour") {
+                var last = results[results.length - 1];
+                if (!last)
+                    return false;
+//                console.log(results);
+                if (moment(last.T).valueOf() == moment().startOf("hour").valueOf()) {
+                    var array = results.slice(-3);
+                    array.pop();
+                } else {
+                    var array = results.slice(-2);
+                }
+                if (array.length == 2) {
+                    var check_candle = checkCandle(array);
+                    if (check_candle == "Up") {
+                        markets[market].up2candle = true;
+                        markets[market].willbuy = array[1].H;
+                        markets[market].take2per = array[1].H * 1.02 /// MOC 2%;
+                        markets[market].take5per = array[1].H * 1.05 /// MOC 5%;
+                        markets[market].take10per = array[1].H * 1.1 /// MOC 10%;
+
+                        markets[market].stop5per = array[1].C * 0.95 // MOC 5%;
+
+                        if (['USDT-BTC'].indexOf(market) != -1) {
+                            var html = "<p>[HOT]" + market + "</p><p>Current Price: " + markets[market].last + "</p><pre>" + JSON.stringify(array, undefined, 2) + "</pre>";
+                            mailOptions['html'] = html;
                             transporter.sendMail(mailOptions, function (error, info) {
                                 if (error) {
                                     console.log(error);
@@ -180,27 +191,27 @@ function getCandle(tickInterval) {
                                     console.log('Email sent: ' + info.response);
                                 }
                             });
-                        } else if (check_candle == "Down") {
-
                         }
-
+                    } else if (check_candle == "Down") {
+                        markets[market].down2candle = true;
                     }
+
                 }
             }
-        });
+        }
     });
 }
 function cronCandleHour() {
     var m = moment();
     var tickInterval = "hour";
     var roundUp = m.minute() || m.second() || m.millisecond() ? m.add(1, 'hour').startOf('hour') : m.startOf('hour');
-    var duration = roundUp.diff(moment());
-    getCandle(tickInterval);
+    var duration = roundUp.diff(moment()) + 300000;
+    getCandleAllMarket(tickInterval);
     console.log(roundUp);
     var timerhour = setTimeout(function () {
-        getCandle(tickInterval);
+        getCandleAllMarket(tickInterval);
         timerhour = setInterval(function () {
-            getCandle(tickInterval);
+            getCandleAllMarket(tickInterval);
         }, 3600000);
     }, duration);
 }
@@ -209,19 +220,36 @@ function cronCandle30Min() {
     var tickInterval = "thirtyMin";
     var remainder = 30 - (m.minute() % 30);
     var roundUp = moment(m).add(remainder, "minutes");
-    var duration = roundUp.diff(moment());
+    var duration = roundUp.diff(moment()) + 300000;
     console.log(roundUp);
-    getCandle(tickInterval);
+    getCandleAllMarket(tickInterval);
     var timer30min = setTimeout(function () {
-        getCandle(tickInterval);
+        getCandleAllMarket(tickInterval);
         timer30min = setInterval(function () {
-            getCandle(tickInterval);
+            getCandleAllMarket(tickInterval);
         }, 1800000);
     }, duration);
-
 }
 function checkPrice(MarketName, price) {
-
+    var obj = markets[MarketName];
+    if (!obj)
+        return;
+    markets[MarketName].last = price;
+    console.log(obj);
+    var btc = markets["USDT-BTC"];
+    if (obj.willbuy < price && obj.up2candle && !obj.send1 && MarketName.indexOf("USDT") != -1) {
+        var percent = (price - obj.willbuy) / obj.willbuy * 100;
+        var html = "<p>" + MarketName + " đang tăng mạnh!</p><p>Current Price: " + price + "(" + percent + "%)</p><pre>" + JSON.stringify(obj, undefined, 2) + "</pre>";
+        mailOptions['html'] = html;
+        transporter.sendMail(mailOptions, function (error, info) {
+            if (error) {
+                console.log(error);
+            } else {
+                console.log('Email sent: ' + info.response);
+                markets[MarketName]['send1'] = true;
+            }
+        });
+    }
 }
 function checkCandle(candles) {
     var candle1 = candles[0];

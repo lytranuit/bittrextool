@@ -3,6 +3,7 @@
     "description": "Server Thu thap du lieu bittrex",
     "version": "0.0.1",
     "dependencies": {
+        "mathjs": "^4.0.1",
         "moment": "^2.21.0",
         "node-bittrex-api": "^0.8.3",
         "nodemailer": "^4.6.3",

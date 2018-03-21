@@ -4,6 +4,8 @@ const mysql = require('promise-mysql');
 const config = require('./config.json');
 const key = require('./key.json');
 const moment = require('moment');
+const math = require('mathjs');
+
 const  pool = mysql.createPool({
     host: 'localhost',
     user: 'root',
@@ -165,11 +167,31 @@ function getCandle(market, tickInterval) {
                     return false;
 //                console.log(results);
                 if (moment(last.T).valueOf() == moment().startOf("hour").valueOf()) {
-                    var array = results.slice(-3);
-                    array.pop();
-                } else {
-                    var array = results.slice(-2);
+                    results.pop();
                 }
+
+                /*
+                 * BOLLINGER BAND 
+                 */
+                var array = results.slice(-20);
+                var arg = array.map(function (item) {
+                    return item['C'];
+                });
+                var ma20 = math.mean(arg);
+                var std = math.std(arg) * 2;
+                var upbolling = ma20 + std;
+                var downbolling = ma20 - std;
+                var bollinger_band = {
+                    ma20: ma20,
+                    upbolling: upbolling,
+                    downbolling: downbolling
+                }
+                markets[market].bollinger_band = bollinger_band;
+                /*
+                 * CHECK 2 NE CUOI CUNG
+                 */
+                var array = results.slice(-2);
+
                 if (array.length == 2) {
                     var check_candle = checkCandle(array);
                     if (check_candle == "Up") {
@@ -195,8 +217,8 @@ function getCandle(market, tickInterval) {
                     } else if (check_candle == "Down") {
                         markets[market].down2candle = true;
                     }
-
                 }
+                console.log(markets[market]);
             }
         }
     });

@@ -48,10 +48,16 @@ bittrex.getmarketsummaries(function (data, err) {
     }
     for (var i in data.result) {
         var row = data.result[i];
-        if (row['MarketName'].indexOf("USDT") != -1 || row['MarketName'].indexOf("BTC") != -1) {
+        if (row['MarketName'].indexOf("USDT") != -1) {
             markets[row['MarketName']] = {
                 MarketName: row['MarketName'],
-                last: row['Last']
+                last: row['Last'],
+                chienluoc1: {
+
+                },
+                chienluoc2: {
+                    
+                }
             };
         }
     }
@@ -103,7 +109,7 @@ bittrex.options({
                             marketsDelta.TimeStamp = timestamp;
 //                            pool.query('INSERT INTO market SET ?', marketsDelta);
 
-                            checkPrice(marketsDelta.MarketName, marketsDelta.Last);
+                            checkPriceChienLuoc1(marketsDelta.MarketName, marketsDelta.Last);
 //                            console.log(marketsDelta);
 //                            console.log('Ticker Update for ' + marketsDelta.MarketName);
                         });
@@ -136,92 +142,96 @@ function getCandleAllMarket(tickInterval) {
     }
 }
 function getCandle(market, tickInterval) {
-    bittrex.getcandles({
-        marketName: market,
-        tickInterval: tickInterval, // intervals are keywords
-    }, function (data, err) {
-        markets[market].up2candle = false;
-        markets[market].down2candle = false;
-        markets[market].send1 = false;
-        if (err) {
-            return false;
-        }
-        if (data.success) {
-            var results = data.result;
-            results.forEach(function (result) {
-                var t = result['T'];
-                var timestamp = moment(t + "+00:00").format('YYYY-MM-DD HH:mm:ss.SSS');
-                result['T'] = timestamp;
-                result['marketName'] = market;
-                result['tickInterval'] = tickInterval;
-                pool.query('INSERT INTO candle SET ?', result).catch(function () {
-                    return pool.query('UPDATE candle SET ? WHERE `marketName` = "' + result['marketName'] + '" and `tickInterval` = "' + result['tickInterval'] + '" and `T` = "' + result['T'] + '"', result);
-                }).catch(function () {
-                    console.log("LOI GI DO");
-                    return;
-                });
-            });
-            if (tickInterval == "hour") {
-                var last = results[results.length - 1];
-                if (!last)
-                    return false;
-//                console.log(results);
-                if (moment(last.T).valueOf() == moment().startOf("hour").valueOf()) {
-                    results.pop();
-                }
-
-                /*
-                 * BOLLINGER BAND 
-                 */
-                var array = results.slice(-20);
-                var arg = array.map(function (item) {
-                    return item['C'];
-                });
-                var ma20 = math.mean(arg);
-                var std = math.std(arg) * 2;
-                var upbolling = ma20 + std;
-                var downbolling = ma20 - std;
-                var bollinger_band = {
-                    ma20: ma20,
-                    upbolling: upbolling,
-                    downbolling: downbolling
-                }
-                markets[market].bollinger_band = bollinger_band;
-                /*
-                 * CHECK 2 NE CUOI CUNG
-                 */
-                var array = results.slice(-2);
-
-                if (array.length == 2) {
-                    var check_candle = checkCandle(array);
-                    if (check_candle == "Up") {
-                        markets[market].up2candle = true;
-                        markets[market].willbuy = array[1].H;
-                        markets[market].take2per = array[1].H * 1.02 /// MOC 2%;
-                        markets[market].take5per = array[1].H * 1.05 /// MOC 5%;
-                        markets[market].take10per = array[1].H * 1.1 /// MOC 10%;
-
-                        markets[market].stop5per = array[1].C * 0.95 // MOC 5%;
-
-                        if (['USDT-BTC'].indexOf(market) != -1) {
-                            var html = "<p>[HOT]" + market + "</p><p>Current Price: " + markets[market].last + "</p><pre>" + JSON.stringify(array, undefined, 2) + "</pre>";
-                            mailOptions['html'] = html;
-                            transporter.sendMail(mailOptions, function (error, info) {
-                                if (error) {
-                                    console.log(error);
-                                } else {
-                                    console.log('Email sent: ' + info.response);
-                                }
-                            });
-                        }
-                    } else if (check_candle == "Down") {
-                        markets[market].down2candle = true;
-                    }
-                }
-                console.log(markets[market]);
+    try {
+        bittrex.getcandles({
+            marketName: market,
+            tickInterval: tickInterval, // intervals are keywords
+        }, function (data, err) {
+            markets[market]['chienluoc1'].up2candle = false;
+            markets[market]['chienluoc1'].down2candle = false;
+            markets[market]['chienluoc1'].send1 = false;
+            if (err) {
+                return false;
             }
-        }
-    });
+            if (data.success) {
+                var results = data.result;
+                results.forEach(function (result) {
+                    var t = result['T'];
+                    var timestamp = moment(t + "+00:00").format('YYYY-MM-DD HH:mm:ss.SSS');
+                    result['T'] = timestamp;
+                    result['marketName'] = market;
+                    result['tickInterval'] = tickInterval;
+                    pool.query('INSERT INTO candle SET ?', result).catch(function () {
+                        return pool.query('UPDATE candle SET ? WHERE `marketName` = "' + result['marketName'] + '" and `tickInterval` = "' + result['tickInterval'] + '" and `T` = "' + result['T'] + '"', result);
+                    }).catch(function () {
+                        console.log("LOI GI DO");
+                        return;
+                    });
+                });
+                if (tickInterval == "hour") {
+                    var last = results[results.length - 1];
+                    if (!last)
+                        return false;
+//                console.log(results);
+                    if (moment(last.T).valueOf() == moment().startOf("hour").valueOf()) {
+                        results.pop();
+                    }
+
+                    /*
+                     * BOLLINGER BAND 
+                     */
+                    var array = results.slice(-20);
+                    var arg = array.map(function (item) {
+                        return item['C'];
+                    });
+                    var ma20 = math.mean(arg);
+                    var std = math.std(arg) * 2;
+                    var upbolling = ma20 + std;
+                    var downbolling = ma20 - std;
+                    var bollinger_band = {
+                        ma20: ma20,
+                        upbolling: upbolling,
+                        downbolling: downbolling
+                    }
+                    markets[market].bollinger_band = bollinger_band;
+                    /*
+                     * CHECK 2 NE CUOI CUNG
+                     */
+                    var array = results.slice(-2);
+
+                    if (array.length == 2) {
+                        var check_candle = checkCandle(array);
+                        if (check_candle == "Up") {
+                            markets[market]['chienluoc1'].up2candle = true;
+                            markets[market]['chienluoc1'].willbuy = array[1].H;
+                            markets[market]['chienluoc1'].take2per = array[1].H * 1.02 /// MOC 2%;
+                            markets[market]['chienluoc1'].take5per = array[1].H * 1.05 /// MOC 5%;
+                            markets[market]['chienluoc1'].take10per = array[1].H * 1.1 /// MOC 10%;
+
+                            markets[market]['chienluoc1'].stop5per = array[1].C * 0.95 // MOC 5%;
+
+                            if (['USDT-BTC'].indexOf(market) != -1) {
+                                var html = "<p>[HOT]" + market + "</p><p>Current Price: " + markets[market].last + "</p><pre>" + JSON.stringify(array, undefined, 2) + "</pre>";
+                                mailOptions['html'] = html;
+                                transporter.sendMail(mailOptions, function (error, info) {
+                                    if (error) {
+                                        console.log(error);
+                                    } else {
+                                        console.log('Email sent: ' + info.response);
+                                    }
+                                });
+                            }
+                        } else if (check_candle == "Down") {
+                            markets[market]['chienluoc1'].down2candle = true;
+                        }
+                    }
+                    console.log(markets[market]);
+                }
+            }
+        });
+    } catch (e) {
+
+    }
 }
 function cronCandleHour() {
     var m = moment();
@@ -252,27 +262,76 @@ function cronCandle30Min() {
         }, 1800000);
     }, duration);
 }
-function checkPrice(MarketName, price) {
-    var obj = markets[MarketName];
-    if (!obj)
+function checkPriceChienLuoc1(MarketName, price) {
+    if (!markets[MarketName])
         return;
-    markets[MarketName].last = price;
-    console.log(obj);
+//    console.log(markets[MarketName]);
     var btc = markets["USDT-BTC"];
-    if (obj.willbuy < price && obj.up2candle && !obj.send1 && MarketName.indexOf("USDT") != -1) {
-        var percent = (price - obj.willbuy) / obj.willbuy * 100;
-        var html = "<p>" + MarketName + " đang tăng mạnh!</p><p>Current Price: " + price + "(" + percent + "%)</p><pre>" + JSON.stringify(obj, undefined, 2) + "</pre>";
+    /*
+     * MUA VÀO
+     */
+    if (markets[MarketName]['chienluoc1'].willbuy < price && markets[MarketName]['chienluoc1'].up2candle && !markets[MarketName]['chienluoc1'].buy && MarketName.indexOf("USDT") != -1) {
+        markets[MarketName]['chienluoc1']['buy'] = true;
+        var percent = (price - markets[MarketName]['chienluoc1'].willbuy) / markets[MarketName]['chienluoc1'].willbuy * 100;
+        var html = "<p>" + MarketName + " đang tăng mạnh!</p><p>Current Price: " + price + "(" + percent + "%)</p><pre>" + JSON.stringify(markets[MarketName], undefined, 2) + "</pre>";
         mailOptions['html'] = html;
         transporter.sendMail(mailOptions, function (error, info) {
             if (error) {
                 console.log(error);
             } else {
                 console.log('Email sent: ' + info.response);
-                markets[MarketName]['send1'] = true;
             }
         });
     }
+    /*
+     * CAT LO
+     */
+    if (markets[MarketName]['chienluoc1'].buy && price < markets[MarketName]['chienluoc1'].stop5per) {
+        markets[MarketName]['chienluoc1']['buy'] = false;
+        markets[MarketName]['chienluoc1']['up2candle'] = false;
+        /*
+         * INSERT DB
+         */
+        pool.query('INSERT INTO trade SET ?', {MarketName: MarketName, price_buy: markets[MarketName].willbuy, price_sell: price});
+    }
+
+    /*
+     * BÁN LẠI
+     */
+    if (markets[MarketName]['chienluoc1'].buy && price < markets[MarketName].last && markets[MarketName]['chienluoc1']['targetdone']) {
+        markets[MarketName]['buy'] = false;
+        markets[MarketName]['up2candle'] = false;
+        /*
+         * INSERT DB
+         */
+        pool.query('INSERT INTO trade SET ?', {MarketName: MarketName, price_buy: markets[MarketName].willbuy, price_sell: price});
+    }
+    /*
+     * KIEM TRA MUC TIEU
+     */
+    if (markets[MarketName]['chienluoc1'].buy && price > markets[MarketName]['chienluoc1'].take10per) {
+        /*
+         * INSERT DB
+         */
+        markets[MarketName]['targetdone'] = true;
+
+    }
+    if (markets[MarketName]['chienluoc1'].buy && price > markets[MarketName]['chienluoc1'].take5per) {
+        /*
+         * INSERT DB
+         */
+        markets[MarketName]['targetdone'] = true;
+    }
+    if (markets[MarketName]['chienluoc1'].buy && price > markets[MarketName]['chienluoc1'].take2per) {
+        /*
+         * INSERT DB
+         */
+        markets[MarketName]['targetdone'] = true;
+    }
+
+    markets[MarketName].last = price;
 }
+
 function checkCandle(candles) {
     var candle1 = candles[0];
     var candle2 = candles[1];

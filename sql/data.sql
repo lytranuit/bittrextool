@@ -33,7 +33,7 @@ CREATE TABLE `candle` (
   `T` timestamp(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   PRIMARY KEY (`id`),
   UNIQUE KEY `unquie` (`MarketName`,`tickInterval`,`T`)
-) ENGINE=InnoDB AUTO_INCREMENT=76085 DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB AUTO_INCREMENT=2361318 DEFAULT CHARSET=latin1;
 
 /*Table structure for table `market` */
 
@@ -56,6 +56,18 @@ CREATE TABLE `market` (
   `Created` timestamp(3) NULL DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1004633 DEFAULT CHARSET=latin1;
+
+/*Table structure for table `trade` */
+
+DROP TABLE IF EXISTS `trade`;
+
+CREATE TABLE `trade` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `MarketName` varchar(250) DEFAULT NULL,
+  `price_buy` float DEFAULT NULL,
+  `price_sell` float DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=latin1;
 
 /*Table structure for table `volumn` */
 

@@ -56,13 +56,13 @@ bittrex.getmarketsummaries(function (data, err) {
 
                 },
                 chienluoc2: {
-                    
                 }
             };
         }
     }
-    cronCandleHour();
+//    cronCandleHour();
 //cronCandle30Min();
+    cronCandle5Min();
 });
 bittrex.options({
     verbose: true,
@@ -161,13 +161,16 @@ function getCandle(market, tickInterval) {
                     result['T'] = timestamp;
                     result['marketName'] = market;
                     result['tickInterval'] = tickInterval;
-                    pool.query('INSERT INTO candle SET ?', result).catch(function () {
-                        return pool.query('UPDATE candle SET ? WHERE `marketName` = "' + result['marketName'] + '" and `tickInterval` = "' + result['tickInterval'] + '" and `T` = "' + result['T'] + '"', result);
-                    }).catch(function () {
-                        console.log("LOI GI DO");
-                        return;
-                    });
+//                    pool.query('INSERT INTO candle SET ?', result).catch(function () {
+//                        return pool.query('UPDATE candle SET ? WHERE `marketName` = "' + result['marketName'] + '" and `tickInterval` = "' + result['tickInterval'] + '" and `T` = "' + result['T'] + '"', result);
+//                    }).catch(function () {
+//                        console.log("LOI GI DO");
+//                        return;
+//                    });
                 });
+
+                console.log(results);
+
                 if (tickInterval == "hour") {
                     var last = results[results.length - 1];
                     if (!last)
@@ -260,6 +263,22 @@ function cronCandle30Min() {
         timer30min = setInterval(function () {
             getCandleAllMarket(tickInterval);
         }, 1800000);
+    }, duration);
+}
+
+function cronCandle5Min() {
+    var m = moment();
+    var tickInterval = "fiveMin";
+    var remainder = 5 - (m.minute() % 5);
+    var roundUp = moment(m).add(remainder, "minutes");
+    var duration = roundUp.diff(moment()) + 60000;
+    console.log(roundUp);
+    getCandleAllMarket(tickInterval);
+    var timer5min = setTimeout(function () {
+        getCandleAllMarket(tickInterval);
+        timer5min = setInterval(function () {
+            getCandleAllMarket(tickInterval);
+        }, 30000);
     }, duration);
 }
 function checkPriceChienLuoc1(MarketName, price) {

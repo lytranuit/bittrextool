@@ -5,6 +5,7 @@ const config = require('./config.json');
 const key = require('./key.json');
 const moment = require('moment');
 const math = require('mathjs');
+const technical = require('technicalindicators');
 
 const  pool = mysql.createPool({
     host: 'localhost',
@@ -61,8 +62,8 @@ bittrex.getmarketsummaries(function (data, err) {
         }
     }
 //    cronCandleHour();
-//cronCandle30Min();
-    cronCandle5Min();
+    cronCandle30Min();
+//    cronCandle5Min();
 });
 bittrex.options({
     verbose: true,
@@ -108,8 +109,8 @@ bittrex.options({
                             var timestamp = moment().format('YYYY-MM-DD HH:mm:ss.SSS');
                             marketsDelta.TimeStamp = timestamp;
 //                            pool.query('INSERT INTO market SET ?', marketsDelta);
-
-                            checkPriceChienLuoc1(marketsDelta.MarketName, marketsDelta.Last);
+                            markets[marketsDelta.MarketName].last = marketsDelta.Last;
+                            checkPrice(marketsDelta.MarketName, marketsDelta.Last);
 //                            console.log(marketsDelta);
 //                            console.log('Ticker Update for ' + marketsDelta.MarketName);
                         });
@@ -169,36 +170,77 @@ function getCandle(market, tickInterval) {
 //                    });
                 });
 
-                console.log(results);
+//                console.log(results);
 
                 if (tickInterval == "hour") {
                     var last = results[results.length - 1];
                     if (!last)
                         return false;
 //                console.log(results);
-                    if (moment(last.T).valueOf() == moment().startOf("hour").valueOf()) {
-                        results.pop();
-                    }
+//                    if (moment(last.T).valueOf() == moment().startOf("hour").valueOf()) {
+//                        results.pop();
+//                    }
+                    /*
+                     * RSI
+                     */
+//                    console.log(array);
+                    var rsi = technical.RSI;
+                    var arg = results.map(function (item) {
+                        return item['C'];
+                    });
+                    var input = {
+                        values: arg,
+                        period: 14
+                    };
+                    var array_rsi = rsi.calculate(input);
+                    markets[market].rsi = array_rsi[array_rsi.length - 1];
+
+                    /*
+                     * MFI
+                     */
+                    var mfi = technical.MFI;
+                    var argh = results.map(function (item) {
+                        return item['H'];
+                    });
+                    var argl = results.map(function (item) {
+                        return item['L'];
+                    });
+                    var argv = results.map(function (item) {
+                        return item['V'];
+                    });
+                    var argc = results.map(function (item) {
+                        return item['C'];
+                    });
+
+                    var input = {
+                        high: argh,
+                        low: argl,
+                        close: argc,
+                        volume: argv,
+                        period: 14
+                    };
+                    var array_mfi = mfi.calculate(input);
+                    markets[market].mfi = array_mfi[array_mfi.length - 1];
 
                     /*
                      * BOLLINGER BAND 
                      */
-                    var array = results.slice(-20);
-                    var arg = array.map(function (item) {
+                    var bb = technical.BollingerBands;
+                    var arg = results.map(function (item) {
                         return item['C'];
                     });
-                    var ma20 = math.mean(arg);
-                    var std = math.std(arg) * 2;
-                    var upbolling = ma20 + std;
-                    var downbolling = ma20 - std;
-                    var bollinger_band = {
-                        ma20: ma20,
-                        upbolling: upbolling,
-                        downbolling: downbolling
-                    }
-                    markets[market].bollinger_band = bollinger_band;
+                    var input = {
+                        values: arg,
+                        period: 20,
+                        stdDev: 2
+                    };
+                    var array_bb = bb.calculate(input);
+                    markets[market].bb = array_bb[array_bb.length - 1];
+
+                    if (market == "USDT-BTC")
+                        console.log(markets[market]);
                     /*
-                     * CHECK 2 NE CUOI CUNG
+                     * CHECK 2 NEN CUOI CUNG
                      */
                     var array = results.slice(-2);
 
@@ -228,7 +270,7 @@ function getCandle(market, tickInterval) {
                             markets[market]['chienluoc1'].down2candle = true;
                         }
                     }
-                    console.log(markets[market]);
+//                    console.log(markets[market]);
                 }
             }
         });
@@ -281,11 +323,16 @@ function cronCandle5Min() {
         }, 30000);
     }, duration);
 }
-function checkPriceChienLuoc1(MarketName, price) {
+function checkPrice(MarketName, price) {
     if (!markets[MarketName])
         return;
 //    console.log(markets[MarketName]);
-    var btc = markets["USDT-BTC"];
+    if (markets["USDT-BTC"]['mfi'] < 20)
+        return;
+    chienluoc1(MarketName, price);
+    chienluoc2(MarketName, price);
+}
+function chienluoc1(MarketName, price) {
     /*
      * MUA VÀO
      */
@@ -347,10 +394,19 @@ function checkPriceChienLuoc1(MarketName, price) {
          */
         markets[MarketName]['targetdone'] = true;
     }
-
-    markets[MarketName].last = price;
 }
+function chienluoc2(MarketName, price) {
+    /*
+     * MUA VÀO
+     */
+    if (!markets[MarketName]['chienluoc2'].notbyinsession && markets[MarketName]['chienluoc2'].countbuy && markets[MarketName]['rsi'] < 30 && markets[MarketName].lower > price) {
+        markets[MarketName]['chienluoc2'].countbuy--;
+        markets[MarketName]['chienluoc2'].notbyinsession = true;
+        markets[MarketName]['chienluoc2']['buy'] = true;
+    }
 
+
+}
 function checkCandle(candles) {
     var candle1 = candles[0];
     var candle2 = candles[1];
